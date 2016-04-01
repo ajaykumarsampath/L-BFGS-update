@@ -1,4 +1,4 @@
-function [ sys ] = Precondition_system(SysMat)
+function [ obj ] = Precondition_system(obj)
 % 
 % Function calculates the precondition matrix 
 % 
@@ -9,10 +9,10 @@ function [ sys ] = Precondition_system(SysMat)
 % Output :  sys        :
 %
 
-sys=SysMat.sys;
-tree=SysMat.tree;
-V=SysMat.V;
-if(strcmp(SysMat.sys_ops.precondition,'No'))
+sys=obj.sys;
+tree=obj.tree;
+V=obj.V;
+if(strcmp(obj.sys_ops.precondition,'Jacobi'))
     % Create the Create the dual-hessian of the system with single scenario
     % 
     Nd=length(tree.stage);
@@ -52,6 +52,7 @@ if(strcmp(SysMat.sys_ops.precondition,'No'))
     Fsys(Np*nc+1:Np*nc+nc_t,Np*nz+1:Np*nz+nx)=sys.Ft{1};
     
     dual_hessian=Fsys*K11*Fsys';
+    obj.sys_ops.Lipschitz=1/norm(dual_hessian,2);
     
     diag_dual_hessian=diag(dual_hessian);
     diag_dual_hessian(1:2*nx)=0;
@@ -65,18 +66,39 @@ if(strcmp(SysMat.sys_ops.precondition,'No'))
             *sys.G{i};
         sys.g{i}=sqrt(tree.prob(i))*diag(inv_sqrt_diag_dual_hessian((j-1)*nc+1:j*nc))...
             *sys.g{i};
-    end 
+    end
     
     for i=1:Ns
-        sys.Ft{i}=sqrt(tree.prob(tree.leave(i)))*...
+        sys.Ft{i}=sqrt(tree.prob(tree.leaves(i)))*...
             diag(inv_sqrt_diag_dual_hessian(Np*nc+1:end))*sys.Ft{i};
-        sys.gt{i}=sqrt(tree.prob(tree.leave(i)))*...
+        sys.gt{i}=sqrt(tree.prob(tree.leaves(i)))*...
             diag(inv_sqrt_diag_dual_hessian(Np*nc+1:end))*sys.gt{i};
     end 
 else
+    Nd=length(tree.stage);
+    Ns=length(tree.leaves);
+    %H1=sys.F{1}*(V.Q\sys.F{1}')+sys.G{1}*(V.R\sys.G{1}');
+    %H1=eye(2*sys.nx+2*sys.nu);
+    for i=1:Nd-Ns
+        %H=sqrt(diag(diag(H1)));
+        sys.F{i}=sqrt(tree.prob(i))*(sys.F{i});
+        sys.G{i}=sqrt(tree.prob(i))*(sys.G{i});
+        sys.g{i}=sqrt(tree.prob(i))*(sys.g{i});
+    end
+    %{
+    for i=1:Ns
+        H1=sys.Ft{i}*(V.Vf{i}\sys.Ft{i}');
+        %Ht{i}=sqrt(diag(diag(H1)));
+        Ht{i}=eye(2*sys.nx);
+    end
+    %}
+    for i=1:Ns
+        sys.Ft{i}=sqrt(tree.prob(tree.leaves(i)))*sys.Ft{i};
+        sys.gt{i}=sqrt(tree.prob(tree.leaves(i)))*sys.gt{i};
+    end
     
 end
-
+obj.sys=sys;
 
 end
 
