@@ -1,4 +1,5 @@
 function [Z,Q]=Solve_step(obj,Y,xinit)
+% 
 % This function calculate the on-line computaiton of the dual gradient on
 % the tree. 
 % 

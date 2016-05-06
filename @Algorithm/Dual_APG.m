@@ -24,13 +24,13 @@ Nd=length(Tree.stage); %  toal nodes in the tree
 Y0.y=zeros(size(sys.F{1},1),Nd-Ns);
 Y1.y=zeros(size(sys.F{1},1),Nd-Ns);
 
-prm_fes_term=cell(Ns,1);
-epsilon_prm=1;
+dual_grad_term=cell(Ns,1);
+%epsilon_prm=1;
 
 for i=1:Ns
     Y0.yt{i,:}=zeros(size(sys.Ft{i,1},1),1);
     Y1.yt{i,:}=zeros(size(sys.Ft{i,1},1),1);
-    prm_fes_term{i,1}=zeros(size(sys.Ft{i,1},1),1);
+    dual_grad_term{i,1}=zeros(size(sys.Ft{i,1},1),1);
 end
 
 %prm_fes=zeros(size(sys.F{1},1),Nd-Ns);
@@ -68,39 +68,59 @@ while(j<ops.steps)
     
     [Y1,details_prox_gconj]=obj.proximal_gconj(Z,W);
     
+    details.lambda(j)=details_prox_gconj.lambda;
+    obj.algo_details.ops_APG.lambda=details_prox_gconj.lambda;
+    
+    %dual_grad=details_prox_gconj.dual_grad;
     prm_fes=details_prox_gconj.prm_fes;
-    dual_grad=details_prox_gconj.dual_grad;
     
+    %dual_grad_term=details_prox_gconj.dual_grad_term;
     prm_fes_term=details_prox_gconj.prm_fes_term;
-    dual_grad_term=details_prox_gconj.dual_grad_term;
     
-    %{
-    for i=1:Tree.ancestor(Tree.leaves(end))
-        prm_fes(:,i)=sys.F{i}*Z.X(:,i)+sys.G{i}*Z.U(:,i);
-        dual_grad(:,i)=prm_fes(:,i)-g_nodes(:,i);
-        Y1.y(i,:)=(max(0,W.y(i,:)'+ops.alpha*(dual_grad(:,i))))';
-    end
+    details.prm_fes{j}=prm_fes;
     
-    for i=1:length(Tree.leaves)
-        prm_fes_term{i,1}=sys.Ft{i,1}*Z.X(:,Tree.leaves(i));
-        dual_grad_term{i,1}=prm_fes_term{i,1}-g_nodes_term{i,1};
-        Y1.yt{i,1}=max(0,W.yt{i,:}+ops.alpha*(dual_grad_term{i,1})');
-    end
-    %}
     iter=j;
     details.prm_cst(iter)=0;%primal cost;
     details.dual_cst(iter)=0;% dual cost;
     
-    %termination criteria
-    if(j==1)
-        prm_avg_next=prm_fes;
-        prm_avg_term_next=prm_fes_term;
-        epsilon_prm_avg=max( max(max(prm_fes-g_nodes)), ...
-            max(max(cell2mat(prm_fes_term)-cell2mat(g_nodes_term))) );
+    %termination criteria 
+    %{
+    epsilon=zeros(Nd,1);
+    for i=1:Nd-Ns   
+        epsilon(i,1)=max(max(sys.F{i}*Z.X(:,i)+sys.G{i}*Z.U(:,i)-sys.g{i},0));
+    end
+    
+    for i=1:Ns
+        j=Tree.leaves(i);     
+        epsilon(j,1)=max(max(sys.Ft{i}*Z.X(:,j)-sys.gt{i},0));
+    end
+    
+    primal_epsilon=max(epsilon)
+    %}
+    epsilon_prm=max(max(max(prm_fes,0)));
+    epsilon_prm=max(max(cell2mat(prm_fes_term),epsilon_prm));
+    
+    if(epsilon_prm>ops.primal_inf)
+        % step 4: theta update
+        theta(1)=theta(2);
+        theta(2)=(sqrt(theta(1)^4+4*theta(1)^2)-theta(1)^2)/2;
+        j=j+1;
     else
-        prm_avg_next=(1-theta(2))*prm_avg_next+theta(2)*prm_fes;
+        details.iterate=j;
+        break
+    end
+    
+    %{
+    termination criteria
+    if(j==1)
+        prm_avg_next=dual_grad;
+        prm_avg_term_next=dual_grad_term;
+        epsilon_prm_avg=max( max(max(dual_grad-g_nodes)), ...
+            max(max(cell2mat(dual_grad_term)-cell2mat(g_nodes_term))) );
+    else
+        prm_avg_next=(1-theta(2))*prm_avg_next+theta(2)*dual_grad;
         for m=1:Ns
-            prm_avg_term_next{m,1}=(1-theta(2))*prm_avg_term_next{m,1}+theta(2)*prm_fes_term{m,1};
+            prm_avg_term_next{m,1}=(1-theta(2))*prm_avg_term_next{m,1}+theta(2)*dual_grad_term{m,1};
         end
         epsilon_prm_avg=max(max(max(prm_avg_next-g_nodes)),...
             max(max(cell2mat(prm_avg_term_next)-cell2mat(g_nodes_term))));
@@ -110,16 +130,16 @@ while(j<ops.steps)
         details.iterate=j;
         j=10*ops.steps;
     else
-        epsilon_prm=max( max(max(prm_fes-g_nodes)), ...
-            max(max(cell2mat(prm_fes_term)-cell2mat(g_nodes_term))) );
+        epsilon_prm=max( max(max(dual_grad-g_nodes)), ...
+            max(max(cell2mat(dual_grad_term)-cell2mat(g_nodes_term))) );
         if(epsilon_prm<=ops.primal_inf) % primal feasibility of the iterate
             if (min(min(min(W.y)),min( W_minyt))>0)
                 sum=0;
                 for i=1:Nd-Ns
-                    sum=sum-W.y(i,:)*(prm_fes(:,i)-g_nodes(:,i));
+                    sum=sum-W.y(i,:)*(dual_grad(:,i)-g_nodes(:,i));
                 end
                 for i=1:Ns
-                    sum=sum-W.yt{i,:}*(prm_fes_term{i,1}-g_nodes_term{i,1});
+                    sum=sum-W.yt{i,:}*(dual_grad_term{i,1}-g_nodes_term{i,1});
                 end
                 if sum<=ops.dual_gap %condition 29. dual gap
                     details.term_crit(1,2)=1;
@@ -150,12 +170,12 @@ while(j<ops.steps)
                 dual_cst=0;% dual cost;concussion
                 for i=1:Nd-Ns
                     prm_cst=prm_cst+Tree.prob(i,1)*(Z.X(:,i)'*V.Q*Z.X(:,i)+Z.U(:,i)'*V.R*Z.U(:,i));
-                    dual_cst=dual_cst+Y1.y(:,i)'*(prm_fes(:,i)-g_nodes(:,i));
+                    dual_cst=dual_cst+Y1.y(:,i)'*(dual_grad(:,i)-g_nodes(:,i));
                 end
                 for i=1:Ns
                     prm_cst=prm_cst+Tree.prob(Tree.leaves(i))*(Z.X(:,Tree.leaves(i))'*V.Vf{i,1}*...
                         Z.X(:,Tree.leaves(i)));
-                    dual_cst=dual_cst+Y1.yt{i}'*(prm_fes_term{i,1}-g_nodes_term{i,1});
+                    dual_cst=dual_cst+Y1.yt{i}'*(dual_grad_term{i,1}-g_nodes_term{i,1});
                 end
                 if (-dual_cst<=ops.dual_gap*max(dual_cst,1)) %condtion 27 (dual gap)
                     details.term_crit(1,4)=1;
@@ -175,19 +195,19 @@ while(j<ops.steps)
             j=j+1;
         end
     end
-    details.epsilon_prm_avg(iter)=epsilon_prm_avg;
+    %}
     details.epsilon_prm(iter)=epsilon_prm;
     details.dual_grad(iter)=0;
     for i=1:Nd-Ns
         details.prm_cst(iter)=details.prm_cst(iter)+Tree.prob(i,1)*(Z.X(:,i)'*V.Q*Z.X(:,i)+Z.U(:,i)'*V.R*Z.U(:,i));
-        details.dual_grad(iter)=details.dual_grad(iter)+(dual_grad(:,i))'*(Y1.y(:,i)-Y0.y(:,i));
-        details.dual_cst(iter)=details.dual_cst(iter)+Y1.y(:,i)'*(dual_grad(:,i));
+        details.dual_grad(iter)=details.dual_grad(iter)+(prm_fes(:,i))'*(Y1.y(:,i)-Y0.y(:,i));
+        details.dual_cst(iter)=details.dual_cst(iter)+Y1.y(:,i)'*(prm_fes(:,i));
     end
     for i=1:Ns
         details.prm_cst(iter)=details.prm_cst(iter)+Tree.prob(Tree.leaves(i))*(Z.X(:,Tree.leaves(i))'*V.Vf{i,1}*...
             Z.X(:,Tree.leaves(i)));
-        details.dual_grad(iter)=details.dual_grad(iter)+(Y1.yt{i,1}-Y0.yt{i,1})'*(prm_fes_term{i,1}-g_nodes_term{i,1});
-        details.dual_cst(iter)=details.dual_cst(iter)+Y1.yt{i,1}'*(dual_grad_term{i,1});
+        details.dual_grad(iter)=details.dual_grad(iter)+(Y1.yt{i,1}-Y0.yt{i,1})'*(dual_grad_term{i,1}-g_nodes_term{i,1});
+        details.dual_cst(iter)=details.dual_cst(iter)+Y1.yt{i,1}'*(prm_fes_term{i,1});
     end
     details.dual_cst(iter)=details.prm_cst(iter)+details.dual_cst(iter);
     

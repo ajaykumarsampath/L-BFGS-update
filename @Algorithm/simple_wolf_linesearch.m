@@ -1,8 +1,9 @@
-function [ alpha,details_LS ] = wolf_linesearch( obj,Grad,Z,Y,d,ops)
+function [ alpha,details_LS ] = simple_wolf_linesearch( obj,Grad,Z,Y,d,ops)
 %
 % This function is the line search algorithm statisfying strong
 % Wolfe conditions. Algorithm 3.5 on pages 60-61 in Nocedal and
-% Wright. In particular for QP.
+% Wright. Here the line search is simplified for the scenario-tree problems
+% with quadratic cost.
 %
 % Syntax : [ alpha ] = wolf_linesearch( fun_quad,Grad,x,d)
 %
@@ -45,13 +46,15 @@ for j=1:Ns
         Y.yt{j}'*separ_vars.yt{j}+0.5*lambda*norm(separ_vars.yt{j})^2;
     curv_dir=curv_dir+Grad.yt{j}'*d.yt{j};
 end
+
+Zdir=obj.Solve_step_line_search(d);
+
 phi0=-phi0;
 %curv_dir=-curv_dir;
 % phi_c the value function at the current direction
 % alpha_p previous alpha
 % alpah_c current alpha
 % phi_p  value function at the previous direction
-
 
 
 alpha_max=1;
@@ -74,7 +77,6 @@ phi_p=phi0;
 i=1;
 details_LS.term_LS=0;
 details_LS.term_WF=0;
-
 while(abs(curv_dir)>1e-8)
     %
     if(alpha_p==alpha_c)
@@ -83,16 +85,14 @@ while(abs(curv_dir)>1e-8)
         phi_p=phi0;
     end
     %}
-    % New direction--dual variable
+    % New direction
     Ynew.y=Y.y+alpha_c*d.y;
     for j=1:Ns
         Ynew.yt{j,1}=Y.yt{j,1}+alpha_c*d.yt{j,1};
     end 
-    
+   
     % value function at Xkk
     [Grad_new,Znew,details_new] =obj.grad_dual_envelop(Ynew,x0);
-    lambda_new=details_new.lambda;
-    %lambda_new
     separ_var_new.y=details_new.Hx-details_new.T.y;
     
     for j=1:Ns
@@ -103,23 +103,23 @@ while(abs(curv_dir)>1e-8)
     new_curv_dir=0;
     for j=1:non_leaf
         phi_c=phi_c+tree.prob(j)*Znew.X(:,j)'*V.Q*Znew.X(:,j)+tree.prob(j)*Znew.U(:,j)'...
-            *V.R*Znew.U(:,j)+0.5*lambda_new*(separ_var_new.y(:,j)'*...
+            *V.R*Znew.U(:,j)+0.5*lambda*(separ_var_new.y(:,j)'*...
             separ_var_new.y(:,j))+Ynew.y(:,j)'*separ_var_new.y(:,j);
         new_curv_dir=new_curv_dir+Grad_new.y(:,j)'*d.y(:,j);
     end
     
     for j=1:Ns
         phi_c=phi_c+tree.prob(non_leaf+j)*Znew.X(:,non_leaf+j)'*V.Vf{j}*Znew.X(:,non_leaf+j)+...
-            Ynew.yt{j}'*separ_var_new.yt{j}+0.5*lambda_new*...
+            Ynew.yt{j}'*separ_var_new.yt{j}+0.5*lambda*...
             norm(separ_var_new.yt{j})^2;
         new_curv_dir=new_curv_dir+Grad_new.yt{j}'*d.yt{j};
     end
     phi_c=-phi_c;
     %new_curv_dir=-new_curv_dir;
+    
     if (phi_c > phi0+c1*alpha_c*curv_dir) || (phi_c >= phi_p && i>1)
-        [alpha_k,details_zoom]=obj.zoom_sectioning(Y,d,alpha_p,alpha_c,ops_zoom);
-        details_LS.inner_iter=i+details_zoom.iter;
-        details_LS.term_WF=details_zoom.term_WF; 
+        [alpha_k,term_WF]=obj.zoom_sectioning(Y,d,alpha_p,alpha_c,ops_zoom);
+        details_LS.term_WF=term_WF; 
         alpha=alpha_k;
         %i=ops.iter_max+10;
         %break;
@@ -130,7 +130,6 @@ while(abs(curv_dir)>1e-8)
     if abs(new_curv_dir)<=-c2*curv_dir
         %if c2*Grad'*d<=Grad_c
         %i-2
-        details_LS.inner_iter=i;
         alpha=alpha_c;
         %break;
         return
@@ -139,10 +138,9 @@ while(abs(curv_dir)>1e-8)
     %end
     
     if new_curv_dir>=0
-        [alpha_k,details_zoom]=obj.zoom_sectioning(Y,d,alpha_c,alpha_p,ops_zoom);
+        [alpha_k,term_WF]=obj.zoom_sectioning(Y,d,alpha_c,alpha_p,ops_zoom);
         alpha=alpha_k;
-        details_LS.term_WF=details_zoom.term_WF;
-        details_LS.inner_iter=i+details_zoom.iter;
+        details_LS.term_WF=term_WF; 
         %break;
         return
         %i=ops.iter_max+10;
@@ -161,15 +159,15 @@ while(abs(curv_dir)>1e-8)
         disp('max iterations line search')
         alpha=alpha_c;
         details_LS.term_LS=1;
-        details_LS.inner_iter=ops.iter_max;
         return
     end
     %}
 end
-%details_LS.inner_iter=0;
 
 
 end
+
+
 
 
 

@@ -22,17 +22,31 @@ classdef Algorithm
                 obj.algo_details=varargin{2};
             end
             ops_APG.steps=2000;
-            ops_APG.primal_inf=5e-3;
+            ops_APG.primal_inf=1e-2;
             ops_APG.dual_gap=1e-2;
             
             %ops_APG.alpha=1/calculate_Lipschitz(obj.SysMat_.sys,obj.SysMat_.V,...
             %   obj.SysMat_.tree);
-            ops_APG.lambda=obj.calculate_Lipschitz();
-            ops_FBS=ops_APG;
-            ops_FBS.memory=5;
-            default_options=struct('algorithm','APG','verbose',0,...
-                'ops_APG',ops_APG,'ops_FBS',ops_FBS);
             
+            ops_APG.prox_LS='no';
+            ops_FBE=ops_APG;
+            %{
+            if(~isfield(obj.algo_details,'ops_APG'))
+                ops_APG.lambda=obj.calculate_Lipschitz();
+            elseif(~isfield(obj.algo_details.ops_APG,'lambda'))
+                ops_APG.lambda=obj.calculate_Lipschitz();
+            end 
+            if(~isfield(obj.algo_details,'ops_FBS'))
+                ops_FBS.lambda=obj.calculate_Lipschitz();
+            elseif(~isfield(obj.algo_details.ops_FBS,'lambda'))
+                ops_FBS.lambda=obj.calculate_Lipschitz();
+            end 
+            %}
+            ops_FBE.memory=5;
+            ops_FBE.LS='WOLFE';
+            default_options=struct('algorithm','APG','verbose',0,...
+                'ops_APG',ops_APG,'ops_FBE',ops_FBE);
+                
             flds = fieldnames(default_options);
             for i=1:numel(flds)
                 if (~isfield(obj.algo_details,flds(i)) &&...
@@ -55,22 +69,31 @@ classdef Algorithm
                 end
             end
             
-            obj.algo_details.ops_FBS.Lbfgs.LBFGS_col = 1;
-            obj.algo_details.ops_FBS.Lbfgs.LBFGS_mem = 0;
-            obj.algo_details.ops_FBS.Lbfgs.skipCount = 0;
-            obj.algo_details.ops_FBS.alphaC=1;
+            
+            if(strcmp(obj.SysMat_.sys_ops.precondition,'Jacobi'))
+               obj.algo_details.ops_FBE.lambda=obj.calculate_Lipschitz();
+               obj.algo_details.ops_APG.lambda=obj.calculate_Lipschitz();
+            end    
+                
+            obj.algo_details.ops_FBE.Lbfgs.LBFGS_col = 1;
+            obj.algo_details.ops_FBE.Lbfgs.LBFGS_mem = 0;
+            obj.algo_details.ops_FBE.Lbfgs.skipCount = 0;
+            obj.algo_details.ops_FBE.alphaC=1;
+            % Backtracking parameters 
+            obj.algo_details.ops_FBE.betaB=0.5;
+            obj.algo_details.ops_FBE.alphaB=0.5;
             
             nx=obj.SysMat_.sys.nx;
             nu=obj.SysMat_.sys.nu;
             Ns=length(obj.SysMat_.tree.leaves);
             Nd=length(obj.SysMat_.tree.stage);
             non_leaf=Nd-Ns;
-            memory=obj.algo_details.ops_FBS.memory;
+            memory=obj.algo_details.ops_FBE.memory;
             
             dim_dual=2*(non_leaf*(nx+nu)+Ns*nx);
-            obj.algo_details.ops_FBS.Lbfgs.S=zeros(dim_dual, memory); % dual variable 
-            obj.algo_details.ops_FBS.Lbfgs.Y  = zeros(dim_dual,memory); % dual gradient 
-            obj.algo_details.ops_FBS.Lbfgs.YS = zeros(memory, 1); 
+            obj.algo_details.ops_FBE.Lbfgs.S=zeros(dim_dual, memory); % dual variable 
+            obj.algo_details.ops_FBE.Lbfgs.Y  = zeros(dim_dual,memory); % dual gradient 
+            obj.algo_details.ops_FBE.Lbfgs.YS = zeros(memory, 1); 
             
         end
         
@@ -93,6 +116,14 @@ classdef Algorithm
         % This function is the implementation of the accelerated proximal 
         % gradient method on the dual 
         
+        [lambda]=backtacking_prox_method(obj,prev_lambda,ops_backtrack)
+        % This function is the implementation of the backtracking algorithm
+        % to find the step-size in the proximal gradient mehtod 
+        
+        [Z,Y,details_ALG]=Solve_step_direction(obj,x0)
+        % This function is the implementation of the accelerated proximal 
+        % gradient method on the dual 
+        
         [ Hd ] = dual_hessian_free( obj,Y,d,Z)
         % This function approximate the dual hessian update function 
         
@@ -101,16 +132,32 @@ classdef Algorithm
         % dual function 
         
         [ obj,dir_env ] = LBFGS_direction( obj,Grad_env,Grad_envOld,Y,Yold)
-        % This function calculates caculates the direction using the
-        % limited mehory quasi-newton method; 
+        % This function calculates the direction using the
+        % limited memory quasi-newton method 
         
-        [ Z,Y1,details ] = Dual_FBS(obj,x0)
+        [ Z,Y1,details ] = Dual_FBE(obj,x0)
+        % This function implements the L-BFGS method for the Forward-Backward
+        % Envelope on the dual function 
         
-        [ alpha ] = wolf_linesearch( obj,Grad,Z,Y,d,ops)
+        [Z,Y1,details]=Dual_FBE_extMem(obj,x0)
+        % This function implements the L-BFGS method for the Forward-Backward
+        % Envelope on the dual function. The L-BFGS update is calculated after 
+        % the buffer is filled 
         
-        [ alpha ]= zoom_sectioning(obj,Y,d,aLo,aHo,ops)
+        [ alpha,term_LS ] = wolf_linesearch( obj,Grad,Z,Y,d,ops)
+        % This function calculates the step size for the direction calculated
+        % from L-BFGS method. This stepsize should satisfy the 
+        % strong wolfe condition. Algorithm 3.2 Nocedal and Wright
         
+        [ alpha,term_LS ]= zoom_sectioning(obj,Y,d,aLo,aHo,ops)
+        % This function calculates the step size for the direction calculated
+        % from L-BFGS method. This stepsize should satisfy the 
+        % strong wolfe condition. Algorithm 3.2 Nocedal and Wright
         
+        [ alpha,details_LS ] = Goldstein_conditions( obj,Grad,Z,Y,d,ops)
+        % This funciton calculates the step size for the direction
+        % calculated from L-BFGS method. This step-size should satisfy the 
+        % GOldstein conditions
     end
     
 end

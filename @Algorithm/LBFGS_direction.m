@@ -3,10 +3,23 @@ function [ obj,dir_env ] = LBFGS_direction( obj,Grad_env,Grad_envOld,Y,Yold)
 % This function calculate the direction using quasi-newton method- limited
 % memory BFGS method.
 %
+% Syntax : [ obj,dir_env ] = LBFGS_direction( obj,Grad_env,Grad_envOld,Y,Yold)
+%
+% Input  :    obj          :   Algorithm object 
+%             Grad_env     :   Gradient of the envelope
+%             Grav_envOld  :   Old gradient envelope 
+%             Y            :   Present state 
+%             Yold         :   Old state
+% 
+% Output :    obj          :   Algorithm object 
+%             dir_env      :   Direction calculated with LBFGS method
+%
+%
+
 sys=obj.SysMat_.sys;
-Lbfgs=obj.algo_details.ops_FBS.Lbfgs;
-memory=obj.algo_details.ops_FBS.memory;
-alphaC=obj.algo_details.ops_FBS.alphaC;
+Lbfgs=obj.algo_details.ops_FBE.Lbfgs;
+memory=obj.algo_details.ops_FBE.memory;
+alphaC=obj.algo_details.ops_FBE.alphaC;
 
 nx=sys.nx;
 nu=sys.nu;
@@ -31,7 +44,9 @@ GradIterOld(1:non_leaf*ny,1)=vec(Grad_envOld.y);
 GradIterOld(non_leaf*ny+1:non_leaf*ny+2*Ns*nx,1)=cell2mat(Grad_envOld.yt);
 
 Yk  = GradIter-GradIterOld;
-YSk = Siter'*GradIter;
+%Siter=-Siter;
+%Yk=-Yk;
+YSk = Yk'*Siter;
 
 if norm(GradIter) < 1,alphaC = 3;end
 if YSk/(Siter'*Siter) > 1e-6*norm(GradIter) ^alphaC
@@ -44,10 +59,14 @@ else
     Lbfgs.skipCount = Lbfgs.skipCount+1;
 end
 Lbfgs.H = YSk/(Yk'*Yk);
+Lbfgs.Hnum=YSk;
+Lbfgs.Hden=(Yk'*Yk);
+Lbfgs.rho=Lbfgs.YS(Lbfgs.LBFGS_col); 
+
 Dir_env = LBFGS(Lbfgs.S,Lbfgs.Y,Lbfgs.YS,Lbfgs.H,...
     -GradIter, int32(Lbfgs.LBFGS_col), int32(Lbfgs.LBFGS_mem));
 
-obj.algo_details.ops_FBS.Lbfgs=Lbfgs;
+obj.algo_details.ops_FBE.Lbfgs=Lbfgs;
 dir_env.y=reshape(Dir_env(1:non_leaf*ny,1),ny,non_leaf);
 
 for i=1:Ns

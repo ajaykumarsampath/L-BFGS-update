@@ -16,7 +16,7 @@ function [ Hd ] = dual_hessian_free( obj,Y,d,Z)
 %
 %
 
-epsilon=obj.algo_details.ops_FBS.epsilon;
+epsilon=obj.algo_details.ops_FBE.epsilon;
 sys=obj.SysMat_.sys;
 tree=obj.SysMat_.tree;
 Nd=length(tree.stage);
@@ -33,11 +33,11 @@ Zepsilon=obj.Solve_step(W,Z.X(:,1));
 Hd=Y;
 
 for i=1:non_leaf
-    Hd.y(:,i)=-(sys.F{i}*(Zepsilon.X(:,i)-Z.X(:,i))+sys.G{i}*(Zepsilon.U(:,i)-Z.U(:,i)));
+    Hd.y(:,i)=-(sys.F{i}*(Zepsilon.X(:,i)-Z.X(:,i))+sys.G{i}*(Zepsilon.U(:,i)-Z.U(:,i)))/epsilon;
 end
 
 for i=1:length(tree.leaves)
-   Hd.yt{i}=-sys.Ft{i}*Zepsilon.X(:,non_leaf+i);
+   Hd.yt{i}=-sys.Ft{i}*(Zepsilon.X(:,non_leaf+i)-Z.X(:,non_leaf+i))/epsilon;
 end
 
 end
