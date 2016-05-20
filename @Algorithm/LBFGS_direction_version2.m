@@ -1,4 +1,4 @@
-function [ obj,dir_env ] = LBFGS_direction( obj,Grad_env,Grad_envOld,Y,Yold)
+function [ Lbfgs,dir_env ] = LBFGS_direction_version2( obj,Grad_env,Grad_envOld,Y,Yold)
 %
 % This function calculate the direction using quasi-newton method- limited
 % memory BFGS method.
@@ -60,7 +60,7 @@ else
 end
 H = YSk/(Yk'*Yk);
 if(H<0)
-    Lbfgs.H=0;
+    Lbfgs.H=1;
 else
     Lbfgs.H=H;
 end
@@ -81,4 +81,5 @@ for i=1:Ns
 end 
 
 end
+
 

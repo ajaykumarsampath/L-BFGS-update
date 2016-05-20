@@ -1,4 +1,4 @@
-function [Z,Y1,details]=Dual_FBE_extMem(obj,x0)
+function [Z,Y1,details]=Dual_FBE_extGrad(obj,x0)
 % This function calculate the optimal solution using the
 % APG algorithm on the the dual problem for the system at the
 % given initial point
@@ -51,10 +51,11 @@ j=1;
 W_minyt=zeros(Ns,1);
 
 details.term_crit=zeros(1,4);
-memory=obj.algo_details.ops_FBE.memory;
+%memory=obj.algo_details.ops_FBE.memory;
+
 %dual_grad=prm_fes;
 %dual_grad_term=prm_fes_term;
-
+grad_steps=0;
 while(j<ops.steps)
     % Step 1: accelerated step
     W.y=Y1.y+theta(2)*(1/theta(1)-1)*(Y1.y-Y0.y);
@@ -89,69 +90,69 @@ while(j<ops.steps)
         obj.algo_details.ops_FBE.lambda=details_prox.lambda;
         details.lambda_prox(j)=details_prox.lambda;
         details.pos_def(j)=details_prox.pos_def;
-        %obj1=obj;
+        
         % calculate the direction by LBFGS method
         [obj,dir_env]= obj.LBFGS_direction(Grad_env,Grad_envOld,W,Wold);
         details.H(j)=obj.algo_details.ops_FBE.Lbfgs.H;
         
-        if(j<=memory)
-            Y0.y=Y1.y;
-            Y0.yt=Y1.yt;
-            Y1.y=W.y+details_prox.lambda*(details_prox.Hx-details_prox.T.y);
+        details.direction(j)=0;
+        
+        for i=1:non_leaf
+            details.direction(j)=details.direction(j)+dir_env.y(:,i)'*Grad_env.y(:,i);
+        end
+        for i=1:Ns
+            details.direction(j)=details.direction(j)+dir_env.yt{i}'*Grad_env.yt{i};
+        end
+        
+        if(abs(details.direction(j))<1e-3)
+            details.inner_loops(j,1)=0;
+            break
+        end
+        % step size calcualtion
+        ops_step_size.separ_vars.y=details_prox.Hx-details_prox.T.y;
+        for i=1:Ns
+            ops_step_size.separ_vars.yt{i}=details_prox.Hx_term{i}-details_prox.T.yt{i};
+        end
+        %
+        if(strcmp(obj.algo_details.ops_FBE.LS,'WOLFE'))
+            [details.tau(j),details_LS]=obj.wolf_linesearch(Grad_env,Z,W,dir_env,ops_step_size);
+            details.inner_loops(j,1)=details_LS.inner_iter;
+        else
+            ops_step_size.Hx=details_prox.Hx;
+            ops_step_size.Hx_term=details_prox.Hx_term;
+            ops_step_size.T=details_prox.T;
+            [details.lambda(j),details_LS]=obj.Goldstein_conditions...
+                (Grad_env,Z,W,dir_env,ops_step_size);
+            details.inner_loops(j,1)=details_LS.inner_loops;
+        end
+        
+        
+        Y0.y=Y1.y;
+        Y0.yt=Y1.yt;
+        %{
+        if(details_LS.term_LS || details_LS.term_WF)
+            details_LS
+        end
+        %}
+        if(~details_LS.term_LS && ~details_LS.term_WF)
+            p=1;
+            %lambda=0.5;
+            %p=1;
+            
+            tau=details.tau(j);
+            Y1.y=W.y+p*tau*dir_env.y;
             for i=1:Ns
-                Y1.yt{i}=W.yt{i}+details_prox.lambda*(details_prox.Hx_term{i}-details_prox.T.yt{i});
+                Y1.yt{i}=W.yt{i}+p*tau*dir_env.yt{i};
             end
         else
-            details.direction(j)=0;
-            for i=1:non_leaf
-                details.direction(j)=details.direction(j)+dir_env.y(:,i)'*Grad_env.y(:,i);
-            end
+            grad_steps=grad_steps+1;
+            Y1.y=W.y+details_prox.lambda*(details_prox.Hx-details_prox.T.y);
             for i=1:Ns
-                details.direction(j)=details.direction(j)+dir_env.yt{i}'*Grad_env.yt{i};
+                Y1.yt{i}=W.yt{i}+details_prox.lambda*(details_prox.Hx_term{i}-...
+                    details_prox.T.yt{i});
             end
-            
-            if(abs(details.direction(j))<1e-3)
-                break
-            end
-            % step size calcualtion
-            ops_step_size.separ_vars.y=details_prox.Hx-details_prox.T.y;
-            for i=1:Ns
-                ops_step_size.separ_vars.yt{i}=details_prox.Hx_term{i}-details_prox.T.yt{i};
-            end
-            %
-            if(strcmp(obj.algo_details.ops_FBE.LS,'WOLFE'))
-                [details.tau(j),details_LS]=obj.wolf_linesearch(Grad_env,Z,W,dir_env,ops_step_size);
-                details.inner_loops(j,1)=details_LS.inner_iter;
-                
-                %details.lambda(j)=lambda;
-                %details_LS.term_LS=0;
-                %details_LS.term_WF=0;
-            else
-                ops_step_size.Hx=details_prox.Hx;
-                ops_step_size.Hx_term=details_prox.Hx_term;
-                ops_step_size.T=details_prox.T;
-                [details.lambda(j),details_LS]=obj.Goldstein_conditions...
-                    (Grad_env,Z,W,dir_env,ops_step_size);
-                details.inner_loops(j,1)=details_LS.inner_loops;
-            end
-            
-            
-            Y0.y=Y1.y;
-            Y0.yt=Y1.yt;
-            if(details_LS.term_LS || details_LS.term_WF)
-                details_LS
-            end
-            
-            if(~details_LS.term_LS && ~details_LS.term_WF)
-                p=1;
-                %lambda=0.5;
-                %p=1;
-                tau=details.tau(j);
-                Y1.y=W.y+p*tau*dir_env.y;
-                for i=1:Ns
-                    Y1.yt{i}=W.yt{i}+p*tau*dir_env.yt{i};
-                end
-            end
+            %theta(1)=theta(2);
+            %theta(2)=(sqrt(theta(1)^4+4*theta(1)^2)-theta(1)^2)/2;
         end
         
     end
@@ -159,33 +160,24 @@ while(j<ops.steps)
     details.cost_function(j)=0;
     for i=1:non_leaf
         details.cost_function(j)=details.cost_function(j)+tree.prob(i)*Z.X(:,i)'*V.Q*Z.X(:,i)...
-            +tree.prob(i)*Z.U(:,i)'*V.R*Z.U(:,i)...
-        +0.5*details_prox.lambda*(ops_step_size.separ_vars.y(:,i)'*...
-        ops_step_size.separ_vars.y(:,i))+Y1.y(:,i)'*ops_step_size.separ_vars.y(:,i);
+            +tree.prob(i)*Z.U(:,i)'*V.R*Z.U(:,i);%...
+            %+0.5*details_prox.lambda*(ops_step_size.separ_vars.y(:,i)'*...
+            %ops_step_size.separ_vars.y(:,i))+Y1.y(:,i)'*ops_step_size.separ_vars.y(:,i);
     end
     
     for i=1:Ns
         details.cost_function(j)=details.cost_function(j)+tree.prob(non_leaf+i)*Z.X(:,non_leaf+i)'...
-            *V.Vf{i}*Z.X(:,non_leaf+i)...
-        +Y1.yt{i}'*ops_step_size.separ_vars.yt{i}+0.5*details_prox.lambda*norm(ops_step_size.separ_vars.yt{i})^2;
+            *V.Vf{i}*Z.X(:,non_leaf+i);%...
+            %+Y1.yt{i}'*ops_step_size.separ_vars.yt{i}+0.5*details_prox.lambda*norm(ops_step_size.separ_vars.yt{i})^2;
     end
-    %{
-    term=0;
-    for i=1:non_leaf
-        term=term+Y1.y(:,i)'*ops_step_size.separ_vars.y(:,i);
-    end
-    for i=1:Ns
-        term=term+Y1.yt{i}'*ops_step_size.separ_vars.yt{i};
-    end
-    term
-    %}
+    
     %details.cost_function(j)=details.cost_function(j);
     Grad_envOld=Grad_env;
     Wold=W;
     
     
     %max(max(ops_step_size.separ_vars.y))
-    if(norm(ops_step_size.separ_vars.y,inf)<0.001 || details_LS.term_LS || details_LS.term_WF)
+    if(norm(ops_step_size.separ_vars.y,inf)<0.001 || details_LS.term_WF)
         details.iter=j;
         obj.algo_details.ops_FBE.Lbfgs;
         break
@@ -213,6 +205,7 @@ details.separ_var.y=(ops_step_size.separ_vars.y);
 details.separ_var.yt=ops_step_size.separ_vars.yt;
 details.Hx=details_prox.Hx;
 details.T=details_prox.T;
+details.grad_steps=grad_steps;
 details.FBE_solve=toc;
 details.W=W;
 

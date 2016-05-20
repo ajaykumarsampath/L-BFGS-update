@@ -88,7 +88,7 @@ while(j<ops.steps)
         [Grad_env,Z,details_prox] =obj.grad_dual_envelop(W,x0);   
         obj.algo_details.ops_FBE.lambda=details_prox.lambda;
         details.lambda_prox(j)=details_prox.lambda;
-        details.pos_def(j)=details_prox.pos_def;
+        %details.pos_def(j)=details_prox.pos_def;
         %obj1=obj;
         % calculate the direction by LBFGS method
         [obj,dir_env]= obj.LBFGS_direction(Grad_env,Grad_envOld,W,Wold);
@@ -190,7 +190,7 @@ while(j<ops.steps)
     
    
     %max(max(ops_step_size.separ_vars.y))
-    if(norm(ops_step_size.separ_vars.y,inf)<0.001 || details_LS.term_LS || details_LS.term_WF)
+    if(norm(ops_step_size.separ_vars.y,inf)<ops.primal_inf || details_LS.term_LS || details_LS.term_WF)
         details.iter=j;
         obj.algo_details.ops_FBE.Lbfgs;
         break

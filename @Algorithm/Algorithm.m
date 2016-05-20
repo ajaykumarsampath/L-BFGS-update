@@ -30,6 +30,7 @@ classdef Algorithm
             
             ops_APG.prox_LS='no';
             ops_FBE=ops_APG;
+            ops_APG.type='yes';
             %{
             if(~isfield(obj.algo_details,'ops_APG'))
                 ops_APG.lambda=obj.calculate_Lipschitz();
@@ -44,9 +45,11 @@ classdef Algorithm
             %}
             ops_FBE.memory=5;
             ops_FBE.LS='WOLFE';
+             obj.algo_details.ops_FBE.monotonicity='yes';
+             
             default_options=struct('algorithm','APG','verbose',0,...
                 'ops_APG',ops_APG,'ops_FBE',ops_FBE);
-                
+            
             flds = fieldnames(default_options);
             for i=1:numel(flds)
                 if (~isfield(obj.algo_details,flds(i)) &&...
@@ -82,6 +85,8 @@ classdef Algorithm
             % Backtracking parameters 
             obj.algo_details.ops_FBE.betaB=0.5;
             obj.algo_details.ops_FBE.alphaB=0.5;
+            % Monotonicity option
+            obj.algo_details.ops_FBE.monotonicity='yes';
             
             nx=obj.SysMat_.sys.nx;
             nu=obj.SysMat_.sys.nu;
@@ -139,7 +144,7 @@ classdef Algorithm
         % This function implements the L-BFGS method for the Forward-Backward
         % Envelope on the dual function 
         
-        [Z,Y1,details]=Dual_FBE_extMem(obj,x0)
+        [Z,Y1,details]=Dual_FBE_extGrad(obj,x0)
         % This function implements the L-BFGS method for the Forward-Backward
         % Envelope on the dual function. The L-BFGS update is calculated after 
         % the buffer is filled 
@@ -158,6 +163,36 @@ classdef Algorithm
         % This funciton calculates the step size for the direction
         % calculated from L-BFGS method. This step-size should satisfy the 
         % GOldstein conditions
+        
+        [Z,Y,details]=Dual_GlobalFBE(obj,x0)
+        % This function is the implement with an intermediate L-BFGS step that 
+        % decrease the cost on the envelope and later apply the proximal
+        % gradient method. 
+        
+        [Y,details_prox]=GobalFBS_proximal_gcong(obj,Z,W)
+        % This function is the implementation of the proximal on the
+        % conjugate of the dual in the FBE function. 
+        
+        [ alpha,details_LS ] = LS_backtracking(obj,Grad,Z,Y,d,ops)
+        % This function is the implements with an line search method for
+        % the decrease of cost on the envelope. 
+        
+        [Z,Y,details]=Dual_GlobalFBE_version2(obj,x0)
+        % This function 
+        
+        [ alpha,details_LS ] = LS_backtrackingVersion2(obj,Grad,Z,Y,d,ops)
+        % This function
+        
+        [ Lbfgs,dir_env ] = LBFGS_direction_version2( obj,Grad_env,Grad_envOld,Y,Yold)
+        % This funciton 
+        %
+        [Z,Y0,details]=Dual_AccelGlobFBE(obj,x0)
+        % This function is the implementation of the L-BFGS step with
+        % accelerated step.
+        
+        [Z,Y0,details]=Dual_AccelGlobFBE_version2(obj,x0)
+        % This function is the implementation of the L-BFGS step with
+        % accelerated step--Version 2
     end
     
 end

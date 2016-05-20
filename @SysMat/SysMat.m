@@ -84,6 +84,7 @@ classdef SysMat
         
         obj=Precondtion_system(obj);
         
+        [ value,primal_epsilon ] = cost_function( obj,Z);
     end
     
     

@@ -102,8 +102,10 @@ while(j<ops.steps)
     
     if(epsilon_prm>ops.primal_inf)
         % step 4: theta update
-        theta(1)=theta(2);
-        theta(2)=(sqrt(theta(1)^4+4*theta(1)^2)-theta(1)^2)/2;
+        if(strcmp(obj.algo_details.ops_APG.type,'yes'))
+            theta(1)=theta(2);
+            theta(2)=(sqrt(theta(1)^4+4*theta(1)^2)-theta(1)^2)/2;
+        end 
         j=j+1;
     else
         details.iterate=j;

@@ -47,17 +47,36 @@ if(strcmp(obj.sys_ops.precondition,'Jacobi'))
     
     Fsys=zeros(nc*Np+nc_t,Np*nz+nx);
     for i=1:Np
-        Fsys((i-1)*nc+1:i*nc,(i-1)*nz+1:i*nz)=[sys.F{1} sys.G{1}];
+        Fsys((i-1)*nc+1:i*nc,(i-1)*nz+1:i*nz)=[sys.F{i} sys.G{i}];
     end
     Fsys(Np*nc+1:Np*nc+nc_t,Np*nz+1:Np*nz+nx)=sys.Ft{1};
     
     dual_hessian=Fsys*K11*Fsys';
+    % Lipschitz of the single scenario
     obj.sys_ops.Lipschitz=1/norm(dual_hessian,2);
     
     diag_dual_hessian=diag(dual_hessian);
     diag_dual_hessian(1:2*nx)=0;
     inv_sqrt_diag_dual_hessian=1./sqrt(diag_dual_hessian);
     inv_sqrt_diag_dual_hessian(1:2*nx)=0;
+    
+    %{
+    for i=1:Nd-Ns
+        j=tree.stage(i)+1;
+        sys.F{i}=diag(inv_sqrt_diag_dual_hessian((j-1)*nc+1:j*nc))...
+            *sys.F{i};
+        sys.G{i}=diag(inv_sqrt_diag_dual_hessian((j-1)*nc+1:j*nc))...
+            *sys.G{i};
+        sys.g{i}=diag(inv_sqrt_diag_dual_hessian((j-1)*nc+1:j*nc))...
+            *sys.g{i};
+    end
+    
+    for i=1:Ns
+        sys.Ft{i}=diag(inv_sqrt_diag_dual_hessian(Np*nc+1:end))*sys.Ft{i};
+        sys.gt{i}=diag(inv_sqrt_diag_dual_hessian(Np*nc+1:end))*sys.gt{i};
+    end
+    
+    %}
     for i=1:Nd-Ns
         j=tree.stage(i)+1;
         sys.F{i}=sqrt(tree.prob(i))*diag(inv_sqrt_diag_dual_hessian((j-1)*nc+1:j*nc))...
@@ -67,13 +86,15 @@ if(strcmp(obj.sys_ops.precondition,'Jacobi'))
         sys.g{i}=sqrt(tree.prob(i))*diag(inv_sqrt_diag_dual_hessian((j-1)*nc+1:j*nc))...
             *sys.g{i};
     end
-    
+    %sys.F{1}=[eye(nx);-eye(nx);zeros(2*nu,nx)];
+    %sys.g{1:2*sys.nx,1}=[eye(nx);-eye(nx);zeros(2*nu,nx)];
     for i=1:Ns
         sys.Ft{i}=sqrt(tree.prob(tree.leaves(i)))*...
             diag(inv_sqrt_diag_dual_hessian(Np*nc+1:end))*sys.Ft{i};
         sys.gt{i}=sqrt(tree.prob(tree.leaves(i)))*...
             diag(inv_sqrt_diag_dual_hessian(Np*nc+1:end))*sys.gt{i};
-    end 
+    end
+    %}
 else
     Nd=length(tree.stage);
     Ns=length(tree.leaves);
