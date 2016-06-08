@@ -1,4 +1,5 @@
 function [Z,Y,details]=Dual_GlobalFBE(obj,x0)
+%
 % This function calculate the optimal solution using the
 % APG algorithm on the the dual problem for the system at the
 % given initial point
@@ -19,6 +20,7 @@ ops=obj.algo_details.ops_FBE;
 Ns=length(tree.leaves); % total scenarios in the tree
 Nd=length(tree.stage); %  toal nodes in the tree
 non_leaf=Nd-Ns;
+ops.primal_inf=obj.algo_details.ops_FBE.primal_inf;
 %lambda=obj.algo_details.ops_FBE.lambda;
 
 
@@ -59,7 +61,7 @@ while(j<ops.steps)
     % step 2 : evaluation of the gradient of envelope
     [Grad_env,Zint,details_prox] =obj.grad_dual_envelop(W,x0);
     obj.algo_details.ops_FBE.lambda=details_prox.lambda;
-    details.lambda_prox(j)=details_prox.lambda;
+    details.lambda_prox(1,j)=details_prox.lambda;
     
     if(Lbfgs_loop)
         % calculate a new direction the quasi-newton method--LBFGS
@@ -106,7 +108,8 @@ while(j<ops.steps)
     
     %step 4 gradient projection algorithm
     [Y,details_prox]=obj.GobalFBS_proximal_gcong(Z,W);
-    obj.algo_details.ops_FBE.lambda=details_prox.lambda;
+    details.lambda_prox(2,j)=details_prox.lambda;
+    %obj.algo_details.ops_FBE.lambda=details_prox.lambda;
     
     if(j==1)
         Grad_envOld=Grad_env;
@@ -132,7 +135,7 @@ while(j<ops.steps)
         %+Y.yt{i}'*prm_infs.yt{i}+0.5*details_prox.lambda*norm(prm_infs.yt{i})^2;
     end
     %max(max(ops_step_size.separ_vars.y))
-    if(max(max(abs(prm_infs.y)))<0.05)
+    if(max(max(abs(prm_infs.y)))<ops.primal_inf)
         details.iter=j;
         obj.algo_details.ops_FBE.Lbfgs;
         break

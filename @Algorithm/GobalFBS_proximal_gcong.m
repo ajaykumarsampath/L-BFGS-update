@@ -100,7 +100,7 @@ else
         details_prox.T.yt{i,1}=min(W.yt{i,1}/lambda+details_prox.Hx_term{i,1},sys.gt{i});
         Y.yt{i,1}=W.yt{i,1}+lambda*(details_prox.Hx_term{i,1}-details_prox.T.yt{i,1});
     end
-    
+    details_prox.lambda=lambda;
 end
 
 

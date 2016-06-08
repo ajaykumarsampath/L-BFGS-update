@@ -21,6 +21,7 @@ ops=obj.algo_details.ops_FBE;
 Ns=length(tree.leaves); % total scenarios in the tree
 Nd=length(tree.stage); %  toal nodes in the tree
 non_leaf=Nd-Ns;
+ops.primal_inf=obj.algo_details.ops_FBE.primal_inf;
 %lambda=obj.algo_details.ops_FBE.lambda;
 
 
@@ -45,11 +46,12 @@ g_nodes=zeros(size(sys.F{1},1),Nd-Ns);
 for i=1:Nd-Ns
     g_nodes(:,i)=sys.g{i};
 end
-
+Hey pantelis. I forgot to mention, the accelerated 
 tic
 j=1;
 
 details.term_crit=zeros(1,4);
+details.monotonicity_steps=0;
 %memory=obj.algo_details.ops_FBE.memory;
 
 grad_steps=0;
@@ -73,7 +75,7 @@ while(j<ops.steps)
     % First calculate the gradient of envelope
     [Grad_env,Zint,details_prox] =obj.grad_dual_envelop(U,x0); 
     obj.algo_details.ops_FBE.lambda=details_prox.lambda;
-    details.lambda_prox(j)=details_prox.lambda;
+    details.lambda_prox(1,j)=details_prox.lambda;
     phi_cur=details_prox.phi;
      
     % Update with the proximal algorithm 
@@ -86,6 +88,7 @@ while(j<ops.steps)
     if(strcmp(obj.algo_details.ops_FBE.monotonicity,'yes'))
         if(phi_cur>phi_prev)
             U=Y1;
+            details.monotonicity_steps=details.monotonicity_steps+1;
             %[j phi_cur-phi_prev]
             [Grad_env,Zint,details_prox] =obj.grad_dual_envelop(U,x0);
             obj.algo_details.ops_FBE.lambda=details_prox.lambda;
@@ -93,7 +96,7 @@ while(j<ops.steps)
             phi_cur=details_prox.phi;
         end
     end
-    %
+    %}
     if(Lbfgs_loop)
         % calculate a new direction the quasi-newton method--LBFGS
         
@@ -119,8 +122,7 @@ while(j<ops.steps)
             ops_step_size.separ_vars.yt{i}=details_prox.Hx_term{i}-details_prox.T.yt{i};
         end
         if(details.H(j)>0)
-            [details.tau(j),details_LS]=obj.LS_backtrackingVersion2...
-                (Grad_env,Zint,U,dir_env,ops_step_size);
+            [details.tau(j),details_LS]=obj.LS_backtracking(Grad_env,Zint,U,dir_env,ops_step_size);
             details.inner_loops(j,1)=details_LS.inner_loops;
             details.phi_diff(j,1)=details_LS.phi_diff;
 
@@ -167,7 +169,8 @@ while(j<ops.steps)
         
         % step 4: gradient projection algorithm
         [Y1,details_prox]=obj.GobalFBS_proximal_gcong(Z,W);
-        obj.algo_details.ops_FBE.lambda=details_prox.lambda;
+        details.lambda_prox(2,j)=details_prox.lambda;
+        %obj.algo_details.ops_FBE.lambda=details_prox.lambda;
     end
     
     
@@ -208,8 +211,15 @@ while(j<ops.steps)
     end
     
     epsilon=max(max(abs(prm_infs.y)));
+    %{
+    if(j==2)
+        max(max(abs(prm_infs.y)));
+    end
+    %}
+    %details.epsilon(j,1)=max(max((prm_infs.y)));
+    %details.epsilon1(j,1)=max(max(abs(prm_infs.y)));
     %epsilon=max(max(max(abs(cell2mat(prm_infs.yt)))),epsilon);
-    if(epsilon<0.01)
+    if(epsilon<ops.primal_inf)
         details.iter=j;
         obj.algo_details.ops_FBE.Lbfgs;
         break

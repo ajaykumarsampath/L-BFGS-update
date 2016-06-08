@@ -218,7 +218,7 @@ end
 details.pos_def=pos_def_test;
 %}
 details.lambda=lambda;
-details.Y1=Y1;
+%details.Y1=Y1;
 
 end
 
