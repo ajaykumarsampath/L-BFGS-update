@@ -16,7 +16,7 @@ ops_masses=struct('Nm',Nm,'Ts',T_sampling,'xmin', ...
     -4*ones(2*Nm,1), 'xmax', 4*ones(2*Nm,1), 'umin', -2*ones(Nm-1,1),'umax',...
     2*ones(Nm-1,1),'b', 0.1*ones(Nm+1,1));
 
-ops_system.brch_fact=[8 6 3]; % branching factor of the tree
+ops_system.brch_fact=[5 4 4]; % branching factor of the tree
 ops_system.uncertainty='additive'; % kind of uncertainty; 0 for additive; 1 for additive
 ...and parametric
 ops_system.N=10; % prediction horizon
@@ -89,8 +89,8 @@ for i=1:test_points
     end
     %}
     % Global FBE
-    [Zclass_GlobLBFS,Yclass_GlobLBFS,Details_GlobLBFS]=FBE_algo_prcnd.Dual_GlobalFBE(ops_FBE.x0);
-    
+    %[Zclass_GlobLBFS,Yclass_GlobLBFS,Details_GlobLBFS]=FBE_algo_prcnd.Dual_GlobalFBE(ops_FBE.x0);
+    [Zclass_GlobLBFS,Yclass_GlobLBFS,Details_GlobLBFS]=FBE_algo_prcnd.Dual_GlobalFBE_version2(ops_FBE.x0);
     iterates(i,2)=Details_GlobLBFS.iter;
     if(Details_GlobLBFS.iter>1)
         inner_final_iter(i,2)=Details_GlobLBFS.inner_loops(end);

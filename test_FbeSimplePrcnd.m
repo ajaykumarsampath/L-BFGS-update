@@ -16,7 +16,7 @@ ops_masses=struct('Nm',Nm,'Ts',T_sampling,'xmin', ...
     -4*ones(2*Nm,1), 'xmax', 4*ones(2*Nm,1), 'umin', -2*ones(Nm-1,1),'umax',...
     2*ones(Nm-1,1),'b', 0.1*ones(Nm+1,1));
 
-ops_system.brch_fact=[5 5 5 4 4]; % branching factor of the tree
+ops_system.brch_fact=[5 5 5 4]; % branching factor of the tree
 ops_system.uncertainty='additive'; % kind of uncertainty; 0 for additive; 1 for additive
 ...and parametric
 ops_system.N=10; % prediction horizon
@@ -38,7 +38,7 @@ AlgoFBE_options.ops_FBE.steps=40;
 AlgoFBE_options.ops_FBE.epsilon=1e-6;
 AlgoFBE_options.algorithm='FBE';
 AlgoFBE_options.ops_FBE.memory=5;
-AlgoFBE_options.ops_FBE.lambda=0.1;
+%AlgoFBE_options.ops_FBE.lambda=0.5;
 AlgoFBE_options.ops_FBE.primal_inf=1e-2;
 %AlgoFBE_opgrad_dual_enveloptions.ops_FBE.LS='GOLDSTEIN';
 
@@ -72,7 +72,8 @@ for i=1:test_points
     i
     %%
     % FBE Algorithm 
-    % FBE_algo_prcnd.algo_details.ops_FBE.lambda=0.1;
+    %{
+    FBE_algo_prcnd.algo_details.ops_FBE.lambda=0.1;
     FBE_algo_smp.algo_details.ops_FBE.prox_LS='yes';
     
     [Zclass_LBFS,Yclass_LBFS,Details_LBFS]=FBE_algo_smp.Dual_FBE(ops_FBE.x0);
@@ -88,10 +89,10 @@ for i=1:test_points
     else
         mean_inner_iter(i,1)=0;
     end
-    
+    %}
     % Global FBE
-    [Zclass_GlobLBFS,Yclass_GlobLBFS,Details_GlobLBFS]=FBE_algo_smp.Dual_GlobalFBE(ops_FBE.x0);
-    
+    %[Zclass_GlobLBFS,Yclass_GlobLBFS,Details_GlobLBFS]=FBE_algo_smp.Dual_GlobalFBE(ops_FBE.x0);
+     [Zclass_GlobLBFS,Yclass_GlobLBFS,Details_GlobLBFS]=FBE_algo_smp.Dual_GlobalFBE_version2(ops_FBE.x0);
     iterates(i,2)=Details_GlobLBFS.iter;
     if(Details_GlobLBFS.iter>1)
         inner_final_iter(i,2)=Details_GlobLBFS.inner_loops(end);
@@ -149,7 +150,7 @@ for i=1:test_points
     
     %
     [cost_function(i,1),primal_epsilon(i,1)]=SysMat.cost_function(Zgurobi);
-    [cost_function(i,2),primal_epsilon(i,2)]=SysMat.cost_function(Zclass_LBFS);
+    %[cost_function(i,2),primal_epsilon(i,2)]=SysMat.cost_function(Zclass_LBFS);
     [cost_function(i,3),primal_epsilon(i,3)]=SysMat.cost_function(Zclass_GlobLBFS);
     %[cost_function(i,4),primal_epsilon(i,4)]=SysMat.cost_function(Zclass_AcceLBFS);
 end
